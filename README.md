@@ -1,93 +1,186 @@
-# Dvpwa Devsecops Llm
+# DVPWA DevSecOps LLM — Pipeline de Segurança
 
+Pipeline DevSecOps com triagem assistida por LLM para detecção, remediação e validação de vulnerabilidades no [DVPWA](https://github.com/anxolerd/dvpwa) (Damn Vulnerable Python Web Application).
 
+**Disciplina**: CS-282 — Sistemas de Software Seguro  
+**Projeto**: Básico de Exame
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Arquitetura da Pipeline
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/rossatodias/dvpwa-devsecops-llm.git
-git branch -M main
-git push -uf origin main
+┌─────────────────────────────────────────────────────────────────────┐
+│                        GitLab CI/CD Pipeline                        │
+├──────────────┬──────────────┬─────────────────┬─────────────────────┤
+│  scan_before │    prompt    │ validate_after  │     scan_after      │
+├──────────────┼──────────────┼─────────────────┼─────────────────────┤
+│ • Bandit     │ • Triage     │ • pytest        │ • Bandit            │
+│ • Semgrep    │   prompt     │   (20 tests)    │ • Semgrep           │
+│ • pip-audit  │ • Remediation│                 │ • pip-audit         │
+│ • Gitleaks   │   prompt     │                 │ • Gitleaks          │
+└──────────────┴──────────────┴─────────────────┴─────────────────────┘
+       ▼                                               ▼
+  artifacts/                                     artifacts/
+  scan-before/                                   scan-after/
+  ├── bandit.json                                ├── bandit.json
+  ├── semgrep.json                               ├── semgrep.json
+  ├── pip-audit.json                             ├── pip-audit.json
+  ├── gitleaks.json                              ├── gitleaks.json
+                                                 └── comparison.md
 ```
 
-## Integrate with your tools
+### Estágios
 
-* [Set up project integrations](https://gitlab.com/rossatodias/dvpwa-devsecops-llm/-/settings/integrations)
+1. **scan_before** — Executa 4 ferramentas SAST/SCA sobre o código original (vulnerável)
+2. **prompt** — Gera prompts para triagem e remediação via LLM
+3. **validate_after** — Executa 20 testes de regressão (pytest)
+4. **scan_after** — Re-executa as 4 ferramentas sobre o código corrigido
 
-## Collaborate with your team
+---
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Vulnerabilidades Corrigidas
 
-## Test and Deploy
+| # | Vulnerabilidade | Arquivo | Correção | Commit |
+|---|----------------|---------|----------|--------|
+| 1 | **SQL Injection** | `sqli/dao/student.py` | Queries parametrizadas (`%s`) | `fix: remediate SQL Injection vulnerability` |
+| 2 | **Stored XSS** | `sqli/app.py` | `autoescape=True` no Jinja2 | `fix: remediate Stored XSS vulnerability` |
+| 3 | **Session Fixation** | `sqli/views.py`, `sqli/middlewares.py` | Regeneração de sessão no login/logout + `httponly=True` | `fix: remediate Session Fixation vulnerability` |
+| 4 | **Senhas MD5** | `sqli/dao/user.py`, `migrations/001-fixtures.sql` | Substituição de MD5 por bcrypt | `fix: remediate bad choice for storing passwords` |
+| 5 | **CSRF** | `sqli/app.py` | Ativação do `csrf_middleware` | `fix: remediate Cross-site request forgery (CSRF)` |
 
-Use the built-in continuous integration in GitLab.
+---
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## Estrutura de Artefatos
 
-***
+```
+artifacts/
+├── scan-before/          # Relatórios da 1ª esteira (antes dos patches)
+│   ├── bandit.json
+│   ├── semgrep.json
+│   ├── pip-audit.json
+│   └── gitleaks.json
+├── prompts/              # Prompts enviados à LLM
+│   ├── triage-prompt.md
+│   └── remediation-prompt.md
+├── llm/                  # Saídas da LLM
+│   ├── llm-triage.md
+│   └── llm-remediation.md
+└── scan-after/           # Relatórios da 2ª esteira (após patches)
+    ├── bandit.json
+    ├── semgrep.json
+    ├── pip-audit.json
+    ├── gitleaks.json
+    └── comparison.md     # Comparativo antes/depois
+```
 
-# Editing this README
+---
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Scans Before/After — Resumo
 
-## Suggestions for a good README
+| Vulnerabilidade | scan-before | scan-after | Status |
+|----------------|-------------|------------|--------|
+| SQL Injection | 🔴 Bandit B608 | 🟢 Removida | ✅ Corrigida |
+| Stored XSS | 🔴 Semgrep autoescape | 🟡 Pode permanecer | ✅ Corrigida (teste prova) |
+| Session Fixation | 🟡 Não detectada por SAST | 🟡 N/A | ✅ Corrigida (teste prova) |
+| Senhas MD5 | 🔴 Bandit B303 | 🟢 Removida | ✅ Corrigida |
+| CSRF | 🔴 Semgrep middleware | 🟢 Removida | ✅ Corrigida |
+| Deps (pip-audit) | 🟡 CVEs presentes | 🟡 CVEs presentes | ⚠️ Fora do escopo |
+| Segredos | 🟢 Limpo | 🟢 Limpo | ✅ OK |
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+> **Nota**: O pip-audit detecta CVEs em **dependências** (aiohttp, jinja2, etc.), não vulnerabilidades da aplicação. Esses findings permanecem porque a atualização de dependências está fora do escopo.
 
-## Name
-Choose a self-explaining name for your project.
+---
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## Testes de Regressão
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```
+tests/
+├── conftest.py                 # Fixtures compartilhados
+├── test_sql_injection.py       # 3 testes — query parametrizada
+├── test_xss.py                 # 3 testes — autoescape + payloads escapados
+├── test_session_fixation.py    # 4 testes — regeneração de sessão + httponly
+├── test_password_storage.py    # 6 testes — bcrypt + verificação funcional
+└── test_csrf.py                # 4 testes — middleware ativo + validação de token
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+**Total: 20 testes — todos passam.**
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+### Execução local
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+pip install pytest bcrypt jinja2
+pytest tests/ -v
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+---
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Prompts Utilizados
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Triagem (`artifacts/prompts/triage-prompt.md`)
+Instrui a LLM a analisar os relatórios scan-before, agrupar duplicatas, identificar falsos positivos e priorizar as 5 vulnerabilidades-alvo.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### Remediação (`artifacts/prompts/remediation-prompt.md`)
+Instrui a LLM a propor patches seguros para cada vulnerabilidade priorizada, incluindo causa raiz, código corrigido, teste de regressão e confirmação no segundo scan.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Saídas LLM
+- `artifacts/llm/llm-triage.md` — Tabela de triagem com decisões e justificativas
+- `artifacts/llm/llm-remediation.md` — Patches propostos com código e testes
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+---
 
-## License
-For open source projects, say how it is licensed.
+## Fluxo Git
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```
+main
+ └── setup/ci-pipeline
+      ├── chore: setup project directory structure
+      ├── ci: create scan-before pipeline with Bandit, Semgrep, pip-audit, and Gitleaks
+      ├── docs: generate LLM triage and remediation prompts and mock outputs
+      └── fix/security-remediation
+           ├── fix: remediate SQL Injection vulnerability
+           ├── fix: remediate Stored XSS vulnerability
+           ├── fix: remediate Session Fixation vulnerability
+           ├── fix: remediate bad choice for storing passwords
+           ├── fix: remediate Cross-site request forgery (CSRF)
+           ├── test: add regression tests for remediated vulnerabilities
+           └── ci: add scan-after pipeline and comparison report
+```
+
+---
+
+## Reprodução
+
+### Pré-requisitos
+- Docker + Docker Compose
+- Python 3.11+
+- Git
+
+### Passo a passo
+
+```bash
+# 1. Clonar o repositório
+git clone https://gitlab.com/rossatodias/dvpwa-devsecops-llm.git
+cd dvpwa-devsecops-llm
+
+# 2. Iniciar DVPWA (Docker Compose)
+docker-compose up -d
+
+# 3. Acessar aplicação
+open http://localhost:8080
+
+# 4. Executar testes de regressão
+pip install pytest bcrypt jinja2
+pytest tests/ -v
+
+# 5. Executar scan local (opcional)
+pip install bandit semgrep pip-audit
+bandit -r . -f json
+semgrep scan --json .
+```
+
+---
+
+## Licença
+
+MIT — baseado em [anxolerd/dvpwa](https://github.com/anxolerd/dvpwa).

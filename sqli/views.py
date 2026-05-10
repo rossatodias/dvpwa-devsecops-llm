@@ -39,6 +39,11 @@ async def index(request: Request):
         async with app['db'].acquire() as conn:
             user = await User.get_by_username(conn, username)
         if user and user.check_password(password):
+            # Prevent session fixation: regenerate session identity
+            session.clear()
+            session._changed = True
+            session._identity = None
+            session._new = True
             session['user_id'] = user.id
             auth_user = user
         else:
@@ -156,5 +161,9 @@ async def evaluate(request: Request):
 @authorize()
 async def logout(request: Request):
     session = await get_session(request)
-    session.pop('user_id', None)
+    # Prevent session fixation: invalidate session on logout
+    session.clear()
+    session._changed = True
+    session._identity = None
+    session._new = True
     raise HTTPFound('/')

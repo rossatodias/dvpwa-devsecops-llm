@@ -1,0 +1,65 @@
+stages:
+  - scan_before
+  - prompt
+  - validate_after
+  - scan_after
+
+# ---------------------------------------------------------------------------
+# Stage: scan_before — first pipeline (before patches)
+# ---------------------------------------------------------------------------
+
+bandit_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install bandit
+  script:
+    - mkdir -p artifacts/scan-before
+    - bandit -r . -f json -o artifacts/scan-before/bandit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/bandit.json
+
+semgrep_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install semgrep
+  script:
+    - mkdir -p artifacts/scan-before
+    - semgrep scan --json --output artifacts/scan-before/semgrep.json . || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/semgrep.json
+
+pip_audit_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install pip-audit
+    - apt-get update && apt-get install -y libpq-dev gcc
+    - pip install -r requirements.txt || true
+  script:
+    - mkdir -p artifacts/scan-before
+    - pip-audit -f json -o artifacts/scan-before/pip-audit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/pip-audit.json
+
+gitleaks_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - apt-get update && apt-get install -y git curl
+    - curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh |
+        sh -s -- -b /usr/local/bin
+  script:
+    - mkdir -p artifacts/scan-before
+    - gitleaks detect --source . --report-format json --report-path artifacts/scan-before/gitleaks.json --no-git || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/gitleaks.json

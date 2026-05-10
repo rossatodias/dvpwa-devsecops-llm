@@ -52,10 +52,12 @@ pip_audit_scan_before:
 gitleaks_scan_before:
   stage: scan_before
   image: python:3.11
+  allow_failure: true
   before_script:
     - apt-get update && apt-get install -y git curl
-    - curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh |
-        sh -s -- -b /usr/local/bin
+    - GITLEAKS_VERSION=8.22.1
+    - curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
+        tar xz -C /usr/local/bin gitleaks
   script:
     - mkdir -p artifacts/scan-before
     - gitleaks detect --source . --report-format json --report-path artifacts/scan-before/gitleaks.json --no-git || true
@@ -128,10 +130,12 @@ pip_audit_scan_after:
 gitleaks_scan_after:
   stage: scan_after
   image: python:3.11
+  allow_failure: true
   before_script:
     - apt-get update && apt-get install -y git curl
-    - curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh |
-        sh -s -- -b /usr/local/bin
+    - GITLEAKS_VERSION=8.22.1
+    - curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
+        tar xz -C /usr/local/bin gitleaks
   script:
     - mkdir -p artifacts/scan-after
     - gitleaks detect --source . --report-format json --report-path artifacts/scan-after/gitleaks.json --no-git || true

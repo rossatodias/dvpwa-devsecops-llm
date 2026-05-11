@@ -167,7 +167,7 @@ cd dvpwa-devsecops-llm
 docker-compose up -d
 
 # 3. Acessar aplicação
-open http://localhost:8080
+open http://localhost:8888
 
 # 4. Executar testes de regressão
 pip install pytest bcrypt jinja2

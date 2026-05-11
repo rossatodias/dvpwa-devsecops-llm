@@ -1,0 +1,146 @@
+stages:
+  - scan_before
+  - prompt
+  - validate_after
+  - scan_after
+
+# ---------------------------------------------------------------------------
+# Stage: scan_before — first pipeline (before patches)
+# ---------------------------------------------------------------------------
+
+bandit_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install bandit
+  script:
+    - mkdir -p artifacts/scan-before
+    - bandit -r . -f json -o artifacts/scan-before/bandit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/bandit.json
+
+semgrep_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install semgrep
+  script:
+    - mkdir -p artifacts/scan-before
+    - semgrep scan --json --output artifacts/scan-before/semgrep.json . || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/semgrep.json
+
+pip_audit_scan_before:
+  stage: scan_before
+  image: python:3.11
+  before_script:
+    - pip install pip-audit
+    - apt-get update && apt-get install -y libpq-dev gcc
+    - pip install -r requirements.txt || true
+  script:
+    - mkdir -p artifacts/scan-before
+    - pip-audit -f json -o artifacts/scan-before/pip-audit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/pip-audit.json
+
+gitleaks_scan_before:
+  stage: scan_before
+  image: python:3.11
+  allow_failure: true
+  before_script:
+    - apt-get update && apt-get install -y git curl
+    - GITLEAKS_VERSION=8.22.1
+    - curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
+        tar xz -C /usr/local/bin gitleaks
+  script:
+    - mkdir -p artifacts/scan-before
+    - gitleaks detect --source . --report-format json --report-path artifacts/scan-before/gitleaks.json --no-git || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-before/gitleaks.json
+
+# ---------------------------------------------------------------------------
+# Stage: validate_after — run regression tests
+# ---------------------------------------------------------------------------
+
+validate_after:
+  stage: validate_after
+  image: python:3.11
+  before_script:
+    - pip install pytest bcrypt jinja2
+  script:
+    - pytest tests/ -v
+  artifacts:
+    when: always
+    paths:
+      - tests/
+
+# ---------------------------------------------------------------------------
+# Stage: scan_after — second pipeline (after patches)
+# ---------------------------------------------------------------------------
+
+bandit_scan_after:
+  stage: scan_after
+  image: python:3.11
+  before_script:
+    - pip install bandit
+  script:
+    - mkdir -p artifacts/scan-after
+    - bandit -r . -f json -o artifacts/scan-after/bandit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-after/bandit.json
+
+semgrep_scan_after:
+  stage: scan_after
+  image: python:3.11
+  before_script:
+    - pip install semgrep
+  script:
+    - mkdir -p artifacts/scan-after
+    - semgrep scan --json --output artifacts/scan-after/semgrep.json . || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-after/semgrep.json
+
+pip_audit_scan_after:
+  stage: scan_after
+  image: python:3.11
+  before_script:
+    - pip install pip-audit
+    - apt-get update && apt-get install -y libpq-dev gcc
+    - pip install -r requirements.txt || true
+  script:
+    - mkdir -p artifacts/scan-after
+    - pip-audit -f json -o artifacts/scan-after/pip-audit.json || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-after/pip-audit.json
+
+gitleaks_scan_after:
+  stage: scan_after
+  image: python:3.11
+  allow_failure: true
+  before_script:
+    - apt-get update && apt-get install -y git curl
+    - GITLEAKS_VERSION=8.22.1
+    - curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" |
+        tar xz -C /usr/local/bin gitleaks
+  script:
+    - mkdir -p artifacts/scan-after
+    - gitleaks detect --source . --report-format json --report-path artifacts/scan-after/gitleaks.json --no-git || true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/scan-after/gitleaks.json
+

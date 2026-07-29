@@ -2,9 +2,6 @@
 
 Pipeline DevSecOps com triagem assistida por LLM para detecção, remediação e validação de vulnerabilidades no [DVPWA](https://github.com/anxolerd/dvpwa) (Damn Vulnerable Python Web Application).
 
-**Disciplina**: CS-282 — Sistemas de Software Seguro  
-**Projeto**: Básico de Exame
-
 ---
 
 ## Arquitetura da Pipeline
